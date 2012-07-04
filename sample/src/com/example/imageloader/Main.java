@@ -149,6 +149,12 @@ public class Main extends Activity {
 		super.onResume();
 	}
 
+	@Override
+	public void onLowMemory() {
+		this.remoteImageLoader.onActivityLowMemory();
+		super.onLowMemory();
+	}
+
 	private void setAdapter() {
 		SampleCursorHelper cursorHelper = SampleCursorHelper.create();
 		String[] urls = this.getResources().getStringArray(R.array.urls);

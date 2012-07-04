@@ -47,11 +47,11 @@ import android.widget.ImageView;
  */
 public class RemoteImageLoader {
 
-	private class DownloadImageRunnable implements Runnable {
+	private class DownloadImageThread extends Thread {
 
 		private boolean mStop = false;
 
-		public DownloadImageRunnable() {
+		public DownloadImageThread() {
 		}
 
 		synchronized boolean isStopped() {
@@ -110,8 +110,8 @@ public class RemoteImageLoader {
 
 		@Override
 		public void run() {
-			try {
 				while (!this.isStopped()) {
+					try {
 					String resource;
 					resource = RemoteImageLoader.this.takeToProcess();
 
@@ -127,11 +127,9 @@ public class RemoteImageLoader {
 						RemoteImageLoader.this.mCache.put(resource, bitmap);
 					RemoteImageLoader.this.receivedDrawable(bitmap, resource,
 							imageHolders);
+					} catch (InterruptedException e) {
+					}
 				}
-			} catch (InterruptedException e) {
-				Log.v(RemoteImageLoader.this.RUNABLE_TAG, "Thread interrupted",
-						e);
-			}
 
 		}
 
@@ -162,7 +160,7 @@ public class RemoteImageLoader {
 			}
 		}
 
-		synchronized public void stop() {
+		synchronized public void stopSelf() {
 			this.mStop = true;
 		}
 
@@ -207,7 +205,7 @@ public class RemoteImageLoader {
 
 	}
 
-	private final String RUNABLE_TAG = DownloadImageRunnable.class
+	private final String RUNABLE_TAG = DownloadImageThread.class
 			.getCanonicalName();
 
 	private static final String IMAGE_CACHE_DIR_PREFIX = "ImageCache";
@@ -241,9 +239,7 @@ public class RemoteImageLoader {
 
 	private final Activity mActivity;
 
-	private Thread mThread;
-
-	private DownloadImageRunnable mDownloadImageRunnable;
+	private DownloadImageThread[] mDownloadImageThread;
 
 	public RemoteImageLoader(Activity activity, Bitmap placeHolder,
 			float requestedHeight, float requestedWidth) {
@@ -292,6 +288,12 @@ public class RemoteImageLoader {
 
 		int cacheSize = 4 * 1024 * 1024; // 4MiB
 		this.mCache = new FileCache(cacheSize);
+		
+		int numberOfThreads = 1;
+		if (Build.VERSION.SDK_INT >= 10)
+			numberOfThreads = 3;
+		
+		this.mDownloadImageThread = new DownloadImageThread[numberOfThreads];
 
 	}
 
@@ -344,7 +346,7 @@ public class RemoteImageLoader {
 		try {
 			this.putToProcess(resource, imageHolder);
 		} catch (InterruptedException e) {
-			e.printStackTrace();
+			// Ignore this error
 		}
 	}
 
@@ -367,10 +369,19 @@ public class RemoteImageLoader {
 	 * Call it on activity Pause
 	 */
 	public void onActivityPause() {
-		this.mDownloadImageRunnable.stop();
-		this.mDownloadImageRunnable = null;
-		this.mThread.interrupt();
-		this.mThread = null;
+		for (int i = 0; i < this.mDownloadImageThread.length; i++) {
+			DownloadImageThread thread = this.mDownloadImageThread[i];
+			thread.stopSelf();
+			thread.interrupt();
+			thread = null;	
+			this.mDownloadImageThread[i] = null;
+		}
+	}
+	
+	/**
+	 * Call it on activity onLowMemory
+	 */
+	public void onActivityLowMemory() {
 		this.mCache.evictAll();
 	}
 
@@ -378,10 +389,13 @@ public class RemoteImageLoader {
 	 * Call it on activity Resume
 	 */
 	public void onActivityResume() {
-		this.mDownloadImageRunnable = new DownloadImageRunnable();
-		this.mThread = new Thread(this.mDownloadImageRunnable);
-		this.mThread.setName("RemoteImageLoader");
-		this.mThread.start();
+		for (int i = 0; i < this.mDownloadImageThread.length; i++) {
+			DownloadImageThread thread = new DownloadImageThread();
+			thread.setPriority(Thread.MIN_PRIORITY);
+			thread.setName(String.format("DownloadImageThread[%d]", i));
+			thread.start();
+			this.mDownloadImageThread[i] = thread;
+		}
 	}
 
 	private boolean putToProcess(String resource, ImageHolder imageHolder)
