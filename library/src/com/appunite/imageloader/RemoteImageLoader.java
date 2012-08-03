@@ -127,8 +127,10 @@ public class RemoteImageLoader {
 						bitmap = this.receiveBitmapFromHttp(resource);
 					} else if (scheme.equals("content")) {
 						bitmap = this.receiveBitmapFromContentProvider(uri);
+					} else if (scheme.equals("file")) {
+						bitmap = this.receiveBitmapFromFile(uri.getPath());
 					} else {
-						bitmap = this.receiveBitmapFromFile(resource);
+						bitmap = null;
 					}
 					Log.v(RemoteImageLoader.this.RUNABLE_TAG,
 							"finished downloading: " + resource);
