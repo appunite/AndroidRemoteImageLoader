@@ -36,6 +36,7 @@ import java.util.concurrent.locks.ReentrantLock;
 import android.annotation.TargetApi;
 import android.app.Activity;
 import android.graphics.Bitmap;
+import android.net.Uri;
 import android.os.Build;
 import android.util.Log;
 import android.widget.ImageView;
@@ -49,6 +50,7 @@ public class RemoteImageLoader {
 
 	private class DownloadImageThread extends Thread {
 
+		private final String TAG = DownloadImageThread.class.getCanonicalName();
 		private boolean mStop = false;
 
 		public DownloadImageThread() {
@@ -65,7 +67,7 @@ public class RemoteImageLoader {
 						.getCacheFile(resource);
 				if (!diskCacheFile.exists())
 					return null;
-				return ImageLoader.loadImageFile(
+				return ImageLoader.loadImage(
 						diskCacheFile.getAbsolutePath(),
 						RemoteImageLoader.this.mImageRequestedHeight,
 						RemoteImageLoader.this.mImageRequestedWidth,
@@ -75,7 +77,7 @@ public class RemoteImageLoader {
 			}
 		}
 
-		private Bitmap receiveBitmap(String resource) {
+		private Bitmap receiveBitmapFromHttp(String resource) {
 			InputStream inputStream = null;
 			Bitmap bitmap = this.loadFromDiskCache(resource);
 			if (bitmap == null) {
@@ -114,10 +116,20 @@ public class RemoteImageLoader {
 					try {
 					String resource;
 					resource = RemoteImageLoader.this.takeToProcess();
+					Uri uri = Uri.parse(resource);
+					String scheme = uri.getScheme();
 
+					
 					Log.v(RemoteImageLoader.this.RUNABLE_TAG,
 							"started downloading: " + resource);
-					Bitmap bitmap = this.receiveBitmap(resource);
+					Bitmap bitmap;
+					if (scheme.equals("http") || scheme.equals("https")) {
+						bitmap = this.receiveBitmapFromHttp(resource);
+					} else if (scheme.equals("content")) {
+						bitmap = this.receiveBitmapFromContentProvider(uri);
+					} else {
+						bitmap = this.receiveBitmapFromFile(resource);
+					}
 					Log.v(RemoteImageLoader.this.RUNABLE_TAG,
 							"finished downloading: " + resource);
 
@@ -131,6 +143,36 @@ public class RemoteImageLoader {
 					}
 				}
 
+		}
+
+		private Bitmap receiveBitmapFromContentProvider(Uri uri) {
+			try {
+				InputStream inputStream = mActivity.getContentResolver().openInputStream(uri);
+				int imageScaleFactore = ImageLoader.getImageScaleFactore(inputStream, RemoteImageLoader.this.mImageRequestedHeight,
+					RemoteImageLoader.this.mImageRequestedWidth,
+					RemoteImageLoader.this.mImageMaxHeight,
+					RemoteImageLoader.this.mImageMaxWidth);
+				inputStream.close();
+				inputStream = mActivity.getContentResolver().openInputStream(uri);
+				Bitmap bitmap = ImageLoader.loadImage(inputStream, imageScaleFactore);
+				inputStream.close();
+				return bitmap;
+			} catch (FileNotFoundException e) {
+				Log.w(TAG, "Could not found Content provider file", e);
+				return null;
+			} catch (IOException e) {
+				Log.w(TAG, "Could not found Content provider file", e);
+				return null;
+			}
+		}
+
+		private Bitmap receiveBitmapFromFile(String resource) {
+			return ImageLoader.loadImage(
+					resource,
+					RemoteImageLoader.this.mImageRequestedHeight,
+					RemoteImageLoader.this.mImageRequestedWidth,
+					RemoteImageLoader.this.mImageMaxHeight,
+					RemoteImageLoader.this.mImageMaxWidth);
 		}
 
 		private void saveInDiskCache(InputStream reader, String resource) {

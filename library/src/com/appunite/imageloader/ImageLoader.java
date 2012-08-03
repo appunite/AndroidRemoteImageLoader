@@ -16,6 +16,8 @@
 
 package com.appunite.imageloader;
 
+import java.io.InputStream;
+
 import android.graphics.Bitmap;
 import android.graphics.BitmapFactory;
 
@@ -47,7 +49,7 @@ public class ImageLoader {
 	 * @return scale factor for file, or -1 if file could not be opened. Scale
 	 *         factor should be 1 or multiple of 2
 	 */
-	private static int getImageScaleFactore(String imageFilePath,
+	public static int getImageScaleFactore(String imageFilePath,
 			float requestedHeight, float requestedWidth, float maxHeight,
 			float maxWidth) {
 		BitmapFactory.Options fileOptions = new BitmapFactory.Options();
@@ -57,12 +59,32 @@ public class ImageLoader {
 			return -1;
 		}
 
+		return getScaleFactoreFromFileOptions(requestedHeight, requestedWidth,
+				maxHeight, maxWidth, fileOptions);
+	}
+	
+	public static int getImageScaleFactore(InputStream inputStream,
+			float requestedHeight, float requestedWidth, float maxHeight,
+			float maxWidth) {
+		BitmapFactory.Options fileOptions = new BitmapFactory.Options();
+		fileOptions.inJustDecodeBounds = true;
+		BitmapFactory.decodeStream(inputStream, null, fileOptions);
+		if (fileOptions.outWidth <= 0) {
+			return -1;
+		}
+
+		return getScaleFactoreFromFileOptions(requestedHeight, requestedWidth,
+				maxHeight, maxWidth, fileOptions);
+	}
+
+	private static int getScaleFactoreFromFileOptions(float requestedHeight,
+			float requestedWidth, float maxHeight, float maxWidth,
+			BitmapFactory.Options fileOptions) {
 		if (fileOptions.outHeight > requestedHeight
 				&& fileOptions.outWidth > requestedWidth
 				|| fileOptions.outHeight > maxHeight
 				|| fileOptions.outWidth > maxWidth) {
 			double log2 = Math.log(2.0d);
-
 			double requestedScaleFactor = Math.min(fileOptions.outHeight
 					/ requestedHeight, fileOptions.outWidth / requestedWidth);
 			int requestedScale = (int) Math.pow(2,
@@ -76,13 +98,12 @@ public class ImageLoader {
 			int scale = requestedScale > maxScale ? requestedScale : maxScale; // Min(x,y)
 			return scale > 0 ? scale : 1;
 		}
-
 		return 1;
 	}
 
-	public static Bitmap loadImageFile(String imageFilePath,
+	public static Bitmap loadImage(String imageFilePath,
 			float requestedHeight, float requestedWidth) {
-		return loadImageFile(imageFilePath, requestedHeight, requestedWidth,
+		return loadImage(imageFilePath, requestedHeight, requestedWidth,
 				3.0f * requestedHeight, 3.0f * requestedWidth);
 	}
 
@@ -106,7 +127,7 @@ public class ImageLoader {
 	 *            maximal width
 	 * @return bitmap image or null if it can not be opened
 	 */
-	public static Bitmap loadImageFile(String imageFilePath,
+	public static Bitmap loadImage(String imageFilePath,
 			float requestedHeight, float requestedWidth, float maxHeight,
 			float maxWidth) {
 
@@ -120,5 +141,17 @@ public class ImageLoader {
 		o.inSampleSize = scale;
 
 		return BitmapFactory.decodeFile(imageFilePath, o);
+	}
+	
+	public static Bitmap loadImage(InputStream inputStream,
+			int scale) {
+
+		if (scale < 1)
+			return null;
+
+		BitmapFactory.Options o = new BitmapFactory.Options();
+		o.inSampleSize = scale;
+
+		return BitmapFactory.decodeStream(inputStream, null, o);
 	}
 }
