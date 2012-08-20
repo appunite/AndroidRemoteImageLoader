@@ -35,9 +35,11 @@ import java.util.concurrent.locks.ReentrantLock;
 
 import android.annotation.TargetApi;
 import android.app.Activity;
+import android.content.res.Resources;
 import android.graphics.Bitmap;
 import android.net.Uri;
 import android.os.Build;
+import android.util.DisplayMetrics;
 import android.util.Log;
 import android.widget.ImageView;
 
@@ -511,5 +513,29 @@ public class RemoteImageLoader {
 		} finally {
 			this.mLock.unlock();
 		}
+	}
+
+	private static float convertDpToPixel(float dp, Resources resources) {
+		DisplayMetrics metrics = resources.getDisplayMetrics();
+		float px = (dp * (metrics.densityDpi / 160f));
+		return px;
+	}
+
+	public static RemoteImageLoader createUsingDp(Activity activity,
+			Bitmap placeHolder, float requestedWidthDp, float requestedHeightDp) {
+		Resources resources = activity.getResources();
+		float widthPx = convertDpToPixel(requestedWidthDp, resources);
+		float heightPx = convertDpToPixel(requestedHeightDp, resources);
+		return new RemoteImageLoader(activity, placeHolder, widthPx, heightPx);
+	}
+
+	public static RemoteImageLoader createUsingDp(Activity activity,
+			URL baseUrl, Bitmap placeHolder, float requestedWidthDp,
+			float requestedHeightDp) {
+		Resources resources = activity.getResources();
+		float widthPx = convertDpToPixel(requestedWidthDp, resources);
+		float heightPx = convertDpToPixel(requestedHeightDp, resources);
+		return new RemoteImageLoader(activity, baseUrl, placeHolder, widthPx,
+				heightPx);
 	}
 }
