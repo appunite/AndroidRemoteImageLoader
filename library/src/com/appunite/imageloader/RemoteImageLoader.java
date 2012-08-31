@@ -40,6 +40,9 @@ import android.graphics.Bitmap;
 import android.net.Uri;
 import android.os.Build;
 import android.util.DisplayMetrics;
+import android.content.ContentResolver;
+import android.database.Cursor;
+import android.provider.MediaStore;
 import android.util.Log;
 import android.widget.ImageView;
 
@@ -151,7 +154,20 @@ public class RemoteImageLoader {
 
 		private Bitmap receiveBitmapFromContentProvider(Uri uri) {
 			try {
-				InputStream inputStream = mActivity.getContentResolver().openInputStream(uri);
+				ContentResolver contentResolver = mActivity.getContentResolver();
+				
+				String contentType = contentResolver.getType(uri);
+				if (contentType != null && contentType.startsWith("video/")) {
+					Cursor cursor = mActivity.getContentResolver().query(uri, new String[] {MediaStore.Video.VideoColumns._ID},null,null,null);
+					if (cursor.moveToFirst()) {
+						long originId = cursor.getLong(0);
+						Bitmap curThumb = MediaStore.Video.Thumbnails.getThumbnail(
+							contentResolver, originId, MediaStore.Video.Thumbnails.MINI_KIND, null);
+						if (curThumb != null)
+							return curThumb;
+					}
+				}
+				InputStream inputStream = contentResolver.openInputStream(uri);
 				int imageScaleFactore = ImageLoader.getImageScaleFactore(inputStream, RemoteImageLoader.this.mImageRequestedHeight,
 					RemoteImageLoader.this.mImageRequestedWidth,
 					RemoteImageLoader.this.mImageMaxHeight,
