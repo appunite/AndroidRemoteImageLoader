@@ -37,12 +37,15 @@ import android.annotation.TargetApi;
 import android.app.Activity;
 import android.content.res.Resources;
 import android.graphics.Bitmap;
+import android.graphics.Matrix;
+import android.media.ExifInterface;
 import android.net.Uri;
 import android.os.Build;
 import android.util.DisplayMetrics;
 import android.content.ContentResolver;
 import android.database.Cursor;
 import android.provider.MediaStore;
+import android.text.TextUtils;
 import android.util.Log;
 import android.widget.ImageView;
 
@@ -151,6 +154,44 @@ public class RemoteImageLoader {
 				}
 
 		}
+		
+		public int getImageOrientation(String filePath) {
+			try {
+				ExifInterface exifReader = new ExifInterface(filePath);
+				int exifRotation = exifReader.getAttributeInt(ExifInterface.TAG_ORIENTATION, ExifInterface.ORIENTATION_NORMAL);
+				switch (exifRotation) {
+				case ExifInterface.ORIENTATION_NORMAL:
+					return 0;
+				case ExifInterface.ORIENTATION_ROTATE_90:
+					return 90;				
+				case ExifInterface.ORIENTATION_ROTATE_180:
+					return 180;
+				case ExifInterface.ORIENTATION_ROTATE_270:
+					return 270;
+				}
+				
+			} catch (IOException e) {
+			}
+			return 0;
+		}
+		
+		public int getImageOrientation(Uri uri) {
+			Cursor cursor = mActivity.getContentResolver().query(uri,
+					new String[] { MediaStore.Images.ImageColumns.ORIENTATION, MediaStore.Images.ImageColumns.DATA},
+					null, null, null);
+			if (!cursor.moveToFirst())
+				return 0;
+			
+			int rotation = cursor.getInt(0);
+			if (rotation != 0)
+				return rotation;
+
+			String filePath = cursor.getString(1);
+			if (TextUtils.isEmpty(filePath))
+				return rotation;
+			
+			return getImageOrientation(filePath);
+		}
 
 		private Bitmap receiveBitmapFromContentProvider(Uri uri) {
 			try {
@@ -166,6 +207,16 @@ public class RemoteImageLoader {
 						if (curThumb != null)
 							return curThumb;
 					}
+				} else if (contentType != null && contentType.startsWith("image/")) {
+					Cursor cursor = mActivity.getContentResolver().query(uri, new String[] {MediaStore.Images.ImageColumns._ID},null,null,null);
+					if (cursor.moveToFirst()) {
+						long originId = cursor.getLong(0);
+						Bitmap curThumb = MediaStore.Images.Thumbnails.getThumbnail(
+							contentResolver, originId, MediaStore.Images.Thumbnails.MINI_KIND, null);
+						if (curThumb != null) {
+							return getRotatedBitmap(curThumb, getImageOrientation(uri));
+						}
+					}
 				}
 				InputStream inputStream = contentResolver.openInputStream(uri);
 				int imageScaleFactore = ImageLoader.getImageScaleFactore(inputStream, RemoteImageLoader.this.mImageRequestedHeight,
@@ -176,6 +227,9 @@ public class RemoteImageLoader {
 				inputStream = mActivity.getContentResolver().openInputStream(uri);
 				Bitmap bitmap = ImageLoader.loadImage(inputStream, imageScaleFactore);
 				inputStream.close();
+				
+				bitmap = getRotatedBitmap(bitmap, getImageOrientation(uri));
+				
 				return bitmap;
 			} catch (FileNotFoundException e) {
 				Log.w(TAG, "Could not found Content provider file", e);
@@ -184,6 +238,18 @@ public class RemoteImageLoader {
 				Log.w(TAG, "Could not found Content provider file", e);
 				return null;
 			}
+		}
+
+		private Bitmap getRotatedBitmap(Bitmap bitmap, int imageOrientation) {
+			if (imageOrientation == 0) 
+				return bitmap;
+			if (bitmap == null)
+				return null;
+			Matrix matrix = new Matrix();
+			matrix.postRotate(imageOrientation);
+			return Bitmap.createBitmap(bitmap, 0, 0, 
+					bitmap.getWidth(), bitmap.getHeight(), 
+			                              matrix, true);
 		}
 
 		private Bitmap receiveBitmapFromFile(String resource) {
