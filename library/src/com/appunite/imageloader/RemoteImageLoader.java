@@ -69,20 +69,14 @@ public class RemoteImageLoader {
 		}
 
 		private Bitmap loadFromDiskCache(String resource) {
+			File diskCacheFile;
 			synchronized (RemoteImageLoader.this.mDiskCache) {
-
-				File diskCacheFile = RemoteImageLoader.this.mDiskCache
+				diskCacheFile = RemoteImageLoader.this.mDiskCache
 						.getCacheFile(resource);
 				if (!diskCacheFile.exists())
 					return null;
-				return ImageLoader.loadImage(
-						diskCacheFile.getAbsolutePath(),
-						RemoteImageLoader.this.mImageRequestedHeight,
-						RemoteImageLoader.this.mImageRequestedWidth,
-						RemoteImageLoader.this.mImageMaxHeight,
-						RemoteImageLoader.this.mImageMaxWidth);
-
 			}
+			return receiveBitmapFromFile(diskCacheFile.getAbsolutePath());
 		}
 
 		private Bitmap receiveBitmapFromHttp(String resource) {
@@ -255,12 +249,14 @@ public class RemoteImageLoader {
 		}
 
 		private Bitmap receiveBitmapFromFile(String resource) {
-			return ImageLoader.loadImage(
+			int imageOrientation = getImageOrientation(resource);
+			Bitmap bitmap = ImageLoader.loadImage(
 					resource,
 					RemoteImageLoader.this.mImageRequestedHeight,
 					RemoteImageLoader.this.mImageRequestedWidth,
 					RemoteImageLoader.this.mImageMaxHeight,
 					RemoteImageLoader.this.mImageMaxWidth);
+			return getRotatedBitmap(bitmap, imageOrientation);
 		}
 
 		private void saveInDiskCache(InputStream reader, String resource) {
