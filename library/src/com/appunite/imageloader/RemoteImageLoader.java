@@ -131,7 +131,9 @@ public class RemoteImageLoader {
 					Log.v(RemoteImageLoader.this.RUNABLE_TAG,
 							"started downloading: " + resource);
 					Bitmap bitmap;
-					if (scheme.equals("http") || scheme.equals("https")) {
+					if (scheme == null) {
+						bitmap = this.receiveBitmapFromFile(resource);
+					} else if (scheme.equals("http") || scheme.equals("https")) {
 						bitmap = this.receiveBitmapFromHttp(resource);
 					} else if (scheme.equals("content")) {
 						bitmap = this.receiveBitmapFromContentProvider(uri);
@@ -460,7 +462,7 @@ public class RemoteImageLoader {
 	 */
 	public synchronized void loadImage(ImageHolder imageHolder, String resource) {
 		this.removeFromProcess(imageHolder);
-		if (resource == null) {
+		if (TextUtils.isEmpty(resource)) {
 			imageHolder.setRemoteBitmap(this.mPlaceHolder);
 			return;
 		}
