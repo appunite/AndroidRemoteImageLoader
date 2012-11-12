@@ -271,7 +271,7 @@ public class RemoteImageLoader {
 							diskCacheFile);
 
 					while ((bytesRead = reader
-							.read(RemoteImageLoader.this.mBuffer)) > 0) {
+							.read(RemoteImageLoader.this.mBuffer)) != -1) {
 						outputStream.write(RemoteImageLoader.this.mBuffer, 0,
 								bytesRead);
 					}
