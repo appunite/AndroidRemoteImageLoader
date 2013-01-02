@@ -17,6 +17,7 @@
 package com.appunite.imageloader;
 
 import java.util.LinkedHashMap;
+import java.util.Locale;
 import java.util.Map;
 
 /**
@@ -297,7 +298,7 @@ public class LruCache<K, V> {
 	public synchronized final String toString() {
 		int accesses = this.hitCount + this.missCount;
 		int hitPercent = accesses != 0 ? (100 * this.hitCount / accesses) : 0;
-		return String.format(
+		return String.format(Locale.US,
 				"LruCache[maxSize=%d,hits=%d,misses=%d,hitRate=%d%%]",
 				this.maxSize, this.hitCount, this.missCount, hitPercent);
 	}

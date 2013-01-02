@@ -17,8 +17,10 @@
 package com.appunite.imageloader;
 
 import java.io.File;
+import java.text.DateFormat;
 import java.text.SimpleDateFormat;
 import java.util.Date;
+import java.util.Locale;
 
 import android.annotation.TargetApi;
 import android.content.Context;
@@ -33,6 +35,7 @@ import android.util.Log;
  */
 public class FileUtils {
 	private static final String TAG = FileUtils.class.getCanonicalName();
+	private static DateFormat sDateFormat = null;
 
 	@TargetApi(8)
 	public static String getDirectoryMovies() {
@@ -59,11 +62,18 @@ public class FileUtils {
 			mediaStorageDir = new File(mediaStorageDir, suffix);
 		return mediaStorageDir;
 	}
+	
+	private static DateFormat getDateFormat() {
+		if (sDateFormat != null) {
+			return sDateFormat;
+		}
+		sDateFormat = new SimpleDateFormat("yyyyMMdd_HHmmss", Locale.US);
+		return sDateFormat;
+	}
 
 	public static File getFileWithTimestamp(File directory, String filePrefix,
 			String fileExtendsion) {
-		String timeStamp = new SimpleDateFormat("yyyyMMdd_HHmmss")
-				.format(new Date());
+		String timeStamp = getDateFormat().format(new Date());
 		String fileName = String.format("%s_%s.%s", filePrefix, timeStamp,
 				fileExtendsion);
 		return new File(directory, fileName);
