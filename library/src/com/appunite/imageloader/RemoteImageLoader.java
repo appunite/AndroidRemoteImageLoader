@@ -58,6 +58,8 @@ public class RemoteImageLoader {
 
 	private class DownloadImageThread extends Thread {
 
+		private static final boolean DEBUG = false;
+		
 		private final String TAG = DownloadImageThread.class.getCanonicalName();
 		private boolean mStop = false;
 
@@ -97,15 +99,18 @@ public class RemoteImageLoader {
 					this.saveInDiskCache(inputStream, resource);
 					bitmap = this.loadFromDiskCache(resource);
 				} catch (MalformedURLException e) {
-					e.printStackTrace();
+					if (DEBUG) {
+						Log.e(TAG, "Could not download: " + resource, e);
+					}
 				} catch (IOException e) {
-					e.printStackTrace();
+					if (DEBUG) {
+						Log.e(TAG, "Could not download: " + resource, e);
+					}
 				} finally {
 					try {
 						if (inputStream != null)
 							inputStream.close();
 					} catch (IOException e) {
-						e.printStackTrace();
 					}
 				}
 			}
@@ -121,9 +126,10 @@ public class RemoteImageLoader {
 					Uri uri = Uri.parse(resource);
 					String scheme = uri.getScheme();
 
-					
-					Log.v(RemoteImageLoader.this.RUNABLE_TAG,
-							"started downloading: " + resource);
+					if (DEBUG) {
+						Log.v(RUNABLE_TAG,
+								"started downloading: " + resource);
+					}
 					Bitmap bitmap;
 					if (scheme == null) {
 						bitmap = this.receiveBitmapFromFile(resource);
@@ -136,8 +142,10 @@ public class RemoteImageLoader {
 					} else {
 						bitmap = null;
 					}
-					Log.v(RemoteImageLoader.this.RUNABLE_TAG,
-							"finished downloading: " + resource);
+					if (DEBUG) {
+						Log.v(RemoteImageLoader.this.RUNABLE_TAG,
+								"finished downloading: " + resource);
+					}
 
 					List<ImageHolder> imageHolders = RemoteImageLoader.this
 							.finishByResource(resource);
