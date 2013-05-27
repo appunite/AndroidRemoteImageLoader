@@ -16,15 +16,6 @@
 
 package com.appunite.imageloader;
 
-import java.io.File;
-import java.io.FileNotFoundException;
-import java.io.FileOutputStream;
-import java.io.IOException;
-import java.io.InputStream;
-import java.io.OutputStream;
-import java.net.MalformedURLException;
-import java.net.URL;
-import java.net.URLConnection;
 import java.util.ArrayList;
 import java.util.HashMap;
 import java.util.List;
@@ -37,16 +28,9 @@ import android.annotation.TargetApi;
 import android.app.Activity;
 import android.content.res.Resources;
 import android.graphics.Bitmap;
-import android.graphics.Matrix;
-import android.media.ExifInterface;
-import android.net.Uri;
 import android.os.Build;
-import android.util.DisplayMetrics;
-import android.content.ContentResolver;
-import android.database.Cursor;
-import android.provider.MediaStore;
 import android.text.TextUtils;
-import android.util.Log;
+import android.util.DisplayMetrics;
 import android.widget.ImageView;
 
 /**
@@ -58,240 +42,36 @@ public class RemoteImageLoader {
 
 	private class DownloadImageThread extends Thread {
 
-		private static final boolean DEBUG = false;
-		
-		private final String TAG = DownloadImageThread.class.getCanonicalName();
 		private boolean mStop = false;
 
+		private RemoteLoader mDownloader;
+
 		public DownloadImageThread() {
+			mDownloader = new RemoteLoader(mActivity, mDiskCache);
 		}
 
 		synchronized boolean isStopped() {
 			return this.mStop;
 		}
 
-		private Bitmap loadFromDiskCache(String resource) {
-			File diskCacheFile;
-			synchronized (RemoteImageLoader.this.mDiskCache) {
-				diskCacheFile = RemoteImageLoader.this.mDiskCache
-						.getCacheFile(resource);
-				if (!diskCacheFile.exists())
-					return null;
-			}
-			return receiveBitmapFromFile(diskCacheFile.getAbsolutePath());
-		}
-
-		private Bitmap receiveBitmapFromHttp(String resource) {
-			InputStream inputStream = null;
-			Bitmap bitmap = this.loadFromDiskCache(resource);
-			if (bitmap == null) {
-
-				try {
-					URL url;
-					if (RemoteImageLoader.this.mBaseUrl == null) {
-						url = new URL(resource);
-					} else {
-						url = new URL(RemoteImageLoader.this.mBaseUrl, resource);
-					}
-					URLConnection connection = url.openConnection();
-					connection.connect();
-					inputStream = connection.getInputStream();
-					this.saveInDiskCache(inputStream, resource);
-					bitmap = this.loadFromDiskCache(resource);
-				} catch (MalformedURLException e) {
-					if (DEBUG) {
-						Log.e(TAG, "Could not download: " + resource, e);
-					}
-				} catch (IOException e) {
-					if (DEBUG) {
-						Log.e(TAG, "Could not download: " + resource, e);
-					}
-				} finally {
-					try {
-						if (inputStream != null)
-							inputStream.close();
-					} catch (IOException e) {
-					}
-				}
-			}
-			return bitmap;
-		}
-
 		@Override
 		public void run() {
-				while (!this.isStopped()) {
-					try {
-					String resource;
-					resource = RemoteImageLoader.this.takeToProcess();
-					Uri uri = Uri.parse(resource);
-					String scheme = uri.getScheme();
+			while (!this.isStopped()) {
+				try {
+					String resource = RemoteImageLoader.this.takeToProcess();
 
-					if (DEBUG) {
-						Log.v(RUNABLE_TAG,
-								"started downloading: " + resource);
-					}
-					Bitmap bitmap;
-					if (scheme == null) {
-						bitmap = this.receiveBitmapFromFile(resource);
-					} else if (scheme.equals("http") || scheme.equals("https")) {
-						bitmap = this.receiveBitmapFromHttp(resource);
-					} else if (scheme.equals("content")) {
-						bitmap = this.receiveBitmapFromContentProvider(uri);
-					} else if (scheme.equals("file")) {
-						bitmap = this.receiveBitmapFromFile(uri.getPath());
-					} else {
-						bitmap = null;
-					}
-					if (DEBUG) {
-						Log.v(RemoteImageLoader.this.RUNABLE_TAG,
-								"finished downloading: " + resource);
-					}
-
+					Bitmap bitmap = mDownloader.downloadImage(resource,
+							mImageRequestedWidth, mImageRequestedHeight);
 					List<ImageHolder> imageHolders = RemoteImageLoader.this
 							.finishByResource(resource);
 					if (bitmap != null)
 						RemoteImageLoader.this.mCache.put(resource, bitmap);
 					RemoteImageLoader.this.receivedDrawable(bitmap, resource,
 							imageHolders);
-					} catch (InterruptedException e) {
-					}
-				}
-
-		}
-		
-		public int getImageOrientation(String filePath) {
-			try {
-				ExifInterface exifReader = new ExifInterface(filePath);
-				int exifRotation = exifReader.getAttributeInt(ExifInterface.TAG_ORIENTATION, ExifInterface.ORIENTATION_NORMAL);
-				switch (exifRotation) {
-				case ExifInterface.ORIENTATION_NORMAL:
-					return 0;
-				case ExifInterface.ORIENTATION_ROTATE_90:
-					return 90;				
-				case ExifInterface.ORIENTATION_ROTATE_180:
-					return 180;
-				case ExifInterface.ORIENTATION_ROTATE_270:
-					return 270;
-				}
-				
-			} catch (IOException e) {
-			}
-			return 0;
-		}
-		
-		public int getImageOrientation(Uri uri) {
-			Cursor cursor = mActivity.getContentResolver().query(uri,
-					new String[] { MediaStore.Images.ImageColumns.ORIENTATION, MediaStore.Images.ImageColumns.DATA},
-					null, null, null);
-			if (!cursor.moveToFirst())
-				return 0;
-			
-			int rotation = cursor.getInt(0);
-			if (rotation != 0)
-				return rotation;
-
-			String filePath = cursor.getString(1);
-			if (TextUtils.isEmpty(filePath))
-				return rotation;
-			
-			return getImageOrientation(filePath);
-		}
-
-		private Bitmap receiveBitmapFromContentProvider(Uri uri) {
-			try {
-				ContentResolver contentResolver = mActivity.getContentResolver();
-				
-				String contentType = contentResolver.getType(uri);
-				if (contentType != null && contentType.startsWith("video/")) {
-					Cursor cursor = mActivity.getContentResolver().query(uri, new String[] {MediaStore.Video.VideoColumns._ID},null,null,null);
-					if (cursor.moveToFirst()) {
-						long originId = cursor.getLong(0);
-						Bitmap curThumb = MediaStore.Video.Thumbnails.getThumbnail(
-							contentResolver, originId, MediaStore.Video.Thumbnails.MINI_KIND, null);
-						if (curThumb != null)
-							return curThumb;
-					}
-				} else if (contentType != null && contentType.startsWith("image/")) {
-					Cursor cursor = mActivity.getContentResolver().query(uri, new String[] {MediaStore.Images.ImageColumns._ID},null,null,null);
-					if (cursor.moveToFirst()) {
-						long originId = cursor.getLong(0);
-						Bitmap curThumb = MediaStore.Images.Thumbnails.getThumbnail(
-							contentResolver, originId, MediaStore.Images.Thumbnails.MINI_KIND, null);
-						if (curThumb != null) {
-							return getRotatedBitmap(curThumb, getImageOrientation(uri));
-						}
-					}
-				}
-				InputStream inputStream = contentResolver.openInputStream(uri);
-				int imageScaleFactore = ImageLoader.getImageScaleFactore(inputStream, RemoteImageLoader.this.mImageRequestedHeight,
-					RemoteImageLoader.this.mImageRequestedWidth,
-					RemoteImageLoader.this.mImageMaxHeight,
-					RemoteImageLoader.this.mImageMaxWidth);
-				inputStream.close();
-				inputStream = mActivity.getContentResolver().openInputStream(uri);
-				Bitmap bitmap = ImageLoader.loadImage(inputStream, imageScaleFactore);
-				inputStream.close();
-				
-				bitmap = getRotatedBitmap(bitmap, getImageOrientation(uri));
-				
-				return bitmap;
-			} catch (FileNotFoundException e) {
-				Log.w(TAG, "Could not found Content provider file", e);
-				return null;
-			} catch (IOException e) {
-				Log.w(TAG, "Could not found Content provider file", e);
-				return null;
-			}
-		}
-
-		private Bitmap getRotatedBitmap(Bitmap bitmap, int imageOrientation) {
-			if (imageOrientation == 0) 
-				return bitmap;
-			if (bitmap == null)
-				return null;
-			Matrix matrix = new Matrix();
-			matrix.postRotate(imageOrientation);
-			return Bitmap.createBitmap(bitmap, 0, 0, 
-					bitmap.getWidth(), bitmap.getHeight(), 
-			                              matrix, true);
-		}
-
-		private Bitmap receiveBitmapFromFile(String resource) {
-			int imageOrientation = getImageOrientation(resource);
-			Bitmap bitmap = ImageLoader.loadImage(
-					resource,
-					RemoteImageLoader.this.mImageRequestedHeight,
-					RemoteImageLoader.this.mImageRequestedWidth,
-					RemoteImageLoader.this.mImageMaxHeight,
-					RemoteImageLoader.this.mImageMaxWidth);
-			return getRotatedBitmap(bitmap, imageOrientation);
-		}
-
-		private void saveInDiskCache(InputStream reader, String resource) {
-			synchronized (RemoteImageLoader.this.mDiskCache) {
-				File diskCacheFile = RemoteImageLoader.this.mDiskCache
-						.getCacheFile(resource);
-
-				try {
-					int bytesRead = 0;
-
-					OutputStream outputStream = new FileOutputStream(
-							diskCacheFile);
-
-					while ((bytesRead = reader
-							.read(RemoteImageLoader.this.mBuffer)) != -1) {
-						outputStream.write(RemoteImageLoader.this.mBuffer, 0,
-								bytesRead);
-					}
-
-					outputStream.flush();
-					outputStream.close();
-				} catch (FileNotFoundException e) {
-					e.printStackTrace();
-				} catch (IOException e) {
-					e.printStackTrace();
+				} catch (InterruptedException e) {
 				}
 			}
+
 		}
 
 		synchronized public void stopSelf() {
@@ -339,18 +119,12 @@ public class RemoteImageLoader {
 
 	}
 
-	private final String RUNABLE_TAG = DownloadImageThread.class
-			.getCanonicalName();
-
-	private static final String IMAGE_CACHE_DIR_PREFIX = "ImageCache";
-
-	private static final float MAX_IMAGE_DEFAULT_FACTOR = 3.0f;
+	public static final String IMAGE_CACHE_DIR_PREFIX = "ImageCache";
 
 	private final LruCache<String, Bitmap> mCache;
 
 	private final DiskCache mDiskCache;
 
-	private final byte[] mBuffer = new byte[1024];
 	private final Lock mLock = new ReentrantLock();
 
 	private final Condition mNotEmpty = this.mLock.newCondition();
@@ -359,35 +133,15 @@ public class RemoteImageLoader {
 
 	public List<String> mResourcesQueue = new ArrayList<String>();
 
-	private final float mImageRequestedHeight;
+	private final int mImageRequestedHeight;
 
-	private float mImageRequestedWidth;
-
-	private final float mImageMaxHeight;
-
-	private float mImageMaxWidth;
-
-	private final URL mBaseUrl;
+	private final int mImageRequestedWidth;
 
 	private final Bitmap mPlaceHolder;
 
 	private final Activity mActivity;
 
 	private DownloadImageThread[] mDownloadImageThread;
-
-	public RemoteImageLoader(Activity activity, Bitmap placeHolder,
-			float requestedHeight, float requestedWidth) {
-		this(activity, null, placeHolder, requestedWidth, requestedWidth,
-				requestedWidth * MAX_IMAGE_DEFAULT_FACTOR, requestedWidth
-						* MAX_IMAGE_DEFAULT_FACTOR);
-	}
-
-	public RemoteImageLoader(Activity activity, URL baseUrl,
-			Bitmap placeHolder, float requestedHeight, float requestedWidth) {
-		this(activity, baseUrl, placeHolder, requestedHeight, requestedWidth,
-				requestedHeight * MAX_IMAGE_DEFAULT_FACTOR, requestedWidth
-						* MAX_IMAGE_DEFAULT_FACTOR);
-	}
 
 	/**
 	 * Create class
@@ -408,16 +162,12 @@ public class RemoteImageLoader {
 	 * @param maxWidth
 	 *            maximal width
 	 */
-	public RemoteImageLoader(Activity activity, URL baseUrl,
-			Bitmap placeHolder, float requestedHeight, float requestedWidth,
-			float maxHeight, float maxWidth) {
+	public RemoteImageLoader(Activity activity,
+			Bitmap placeHolder, int requestedWidth, int requestedHeight) {
 		this.mActivity = activity;
-		this.mBaseUrl = baseUrl;
 		this.mPlaceHolder = placeHolder;
-		this.mImageRequestedHeight = requestedHeight;
 		this.mImageRequestedWidth = requestedWidth;
-		this.mImageMaxHeight = maxHeight;
-		this.mImageRequestedWidth = maxWidth;
+		this.mImageRequestedHeight = requestedHeight;
 		this.mDiskCache = new DiskCache(activity, IMAGE_CACHE_DIR_PREFIX);
 
 		int cacheSize = 4 * 1024 * 1024; // 4MiB
@@ -603,27 +353,17 @@ public class RemoteImageLoader {
 		}
 	}
 
-	private static float convertDpToPixel(float dp, Resources resources) {
+	private static int convertDpToPixel(float dp, Resources resources) {
 		DisplayMetrics metrics = resources.getDisplayMetrics();
-		float px = (dp * (metrics.densityDpi / 160f));
-		return px;
+		return (int) (dp * (metrics.densityDpi / 160f));
 	}
 
 	public static RemoteImageLoader createUsingDp(Activity activity,
 			Bitmap placeHolder, float requestedWidthDp, float requestedHeightDp) {
 		Resources resources = activity.getResources();
-		float widthPx = convertDpToPixel(requestedWidthDp, resources);
-		float heightPx = convertDpToPixel(requestedHeightDp, resources);
+		int widthPx = convertDpToPixel(requestedWidthDp, resources);
+		int heightPx = convertDpToPixel(requestedHeightDp, resources);
 		return new RemoteImageLoader(activity, placeHolder, widthPx, heightPx);
 	}
 
-	public static RemoteImageLoader createUsingDp(Activity activity,
-			URL baseUrl, Bitmap placeHolder, float requestedWidthDp,
-			float requestedHeightDp) {
-		Resources resources = activity.getResources();
-		float widthPx = convertDpToPixel(requestedWidthDp, resources);
-		float heightPx = convertDpToPixel(requestedHeightDp, resources);
-		return new RemoteImageLoader(activity, baseUrl, placeHolder, widthPx,
-				heightPx);
-	}
 }

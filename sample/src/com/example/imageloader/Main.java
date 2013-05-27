@@ -164,8 +164,8 @@ public class Main extends Activity {
 
 		Bitmap placeHolder = BitmapFactory.decodeResource(this.getResources(),
 				R.drawable.ic_contact_picture_holo_dark);
-		this.remoteImageLoader = new RemoteImageLoader(this, placeHolder,
-				REQUESTED_SIZE, REQUESTED_SIZE);
+		this.remoteImageLoader = RemoteImageLoader.createUsingDp(this, placeHolder,
+                REQUESTED_SIZE, REQUESTED_SIZE);
 
 		SampleCursorAdapter sampleCursorAdapter = new SampleCursorAdapter(this,
 				cursorHelper.getCursor(), this.remoteImageLoader);
