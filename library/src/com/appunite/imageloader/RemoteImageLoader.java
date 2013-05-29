@@ -28,10 +28,13 @@ import android.annotation.TargetApi;
 import android.app.Activity;
 import android.content.res.Resources;
 import android.graphics.Bitmap;
+import android.graphics.Point;
 import android.os.Build;
 import android.text.TextUtils;
 import android.util.DisplayMetrics;
+import android.view.Display;
 import android.widget.ImageView;
+import android.widget.ImageView.ScaleType;
 
 /**
  * 
@@ -39,6 +42,9 @@ import android.widget.ImageView;
  * 
  */
 public class RemoteImageLoader {
+
+	private static final int NUMBER_OF_SCREENS_IN_MEMORY = 4;
+	private static final int BYTES_PER_PIXEL = 4;
 
 	private class DownloadImageThread extends Thread {
 
@@ -64,10 +70,11 @@ public class RemoteImageLoader {
 							mImageRequestedWidth, mImageRequestedHeight);
 					List<ImageHolder> imageHolders = RemoteImageLoader.this
 							.finishByResource(resource);
-					if (bitmap != null)
-						RemoteImageLoader.this.mCache.put(resource, bitmap);
-					RemoteImageLoader.this.receivedDrawable(bitmap, resource,
-							imageHolders);
+					if (bitmap != null) {
+						receivedDrawable(bitmap, resource, imageHolders);
+					} else {
+						failDownloading(resource, imageHolders);
+					}
 				} catch (InterruptedException e) {
 				}
 			}
@@ -102,26 +109,53 @@ public class RemoteImageLoader {
 	}
 
 	public interface ImageHolder {
-		void setRemoteBitmap(Bitmap bitmap);
+		void setRemoteBitmap(Bitmap bitmap, boolean immediately);
+		void failDownloading(boolean immediately);
+		void setPlaceholer(boolean immediately);
+	}
+	
+	public static ImageHolder newImageHolder(ImageView imageView,
+			int placeholderDrawable, int errorDrawable) {
+		return new ImageViewHolder(imageView, placeholderDrawable, errorDrawable);
 	}
 
-	public static class ImageViewHolder implements ImageHolder {
+	private static class ImageViewHolder implements ImageHolder {
 		private final ImageView mImageView;
+		private final int mPlaceholderDrawable;
+		private final int mErrorDrawable;
 
-		public ImageViewHolder(ImageView imageView) {
-			this.mImageView = imageView;
+		public ImageViewHolder(ImageView imageView, int placeholderDrawable, int errorDrawable) {
+			mImageView = imageView;
+			mPlaceholderDrawable = placeholderDrawable;
+			mErrorDrawable = errorDrawable;
 		}
 
 		@Override
-		public void setRemoteBitmap(Bitmap bitmap) {
-			this.mImageView.setImageBitmap(bitmap);
+		public void setRemoteBitmap(Bitmap bitmap, boolean immediately) {
+			mImageView.setImageBitmap(bitmap);
+			mImageView.setScaleType(ScaleType.CENTER_CROP);
+		}
+
+		@Override
+		public void failDownloading(boolean immediately) {
+			mImageView.setImageResource(mErrorDrawable);
+			mImageView.setScaleType(ScaleType.FIT_XY);
+		}
+
+		@Override
+		public void setPlaceholer(boolean immediately) {
+			mImageView.setImageResource(mPlaceholderDrawable);
+			mImageView.setScaleType(ScaleType.FIT_XY);
 		}
 
 	}
 
 	public static final String IMAGE_CACHE_DIR_PREFIX = "ImageCache";
 
+	private static final long FAIL_TIME_MILLIS = 10 * 1000;
+
 	private final LruCache<String, Bitmap> mCache;
+	private final HashMap<String, Long> mFails;
 
 	private final DiskCache mDiskCache;
 
@@ -137,11 +171,21 @@ public class RemoteImageLoader {
 
 	private final int mImageRequestedWidth;
 
-	private final Bitmap mPlaceHolder;
-
 	private final Activity mActivity;
 
 	private DownloadImageThread[] mDownloadImageThread;
+	
+	@SuppressWarnings("deprecation")
+	@TargetApi(Build.VERSION_CODES.HONEYCOMB_MR2)
+	private void getDisplaySize(Activity activity, Point displaySize) {
+		Display display = activity.getWindowManager().getDefaultDisplay();
+		if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.HONEYCOMB_MR2) {
+			display.getSize(displaySize);
+		} else {
+			displaySize.x = display.getWidth();
+			displaySize.y = display.getHeight();
+		}
+	}
 
 	/**
 	 * Create class
@@ -162,16 +206,21 @@ public class RemoteImageLoader {
 	 * @param maxWidth
 	 *            maximal width
 	 */
-	public RemoteImageLoader(Activity activity,
-			Bitmap placeHolder, int requestedWidth, int requestedHeight) {
+	public RemoteImageLoader(Activity activity, int requestedWidth,
+			int requestedHeight) {
 		this.mActivity = activity;
-		this.mPlaceHolder = placeHolder;
 		this.mImageRequestedWidth = requestedWidth;
 		this.mImageRequestedHeight = requestedHeight;
 		this.mDiskCache = new DiskCache(activity, IMAGE_CACHE_DIR_PREFIX);
+		
+		Point displaySize = new Point();
+		getDisplaySize(activity, displaySize);
+		int displayMemory = displaySize.x * displaySize.y * BYTES_PER_PIXEL;
+	
 
-		int cacheSize = 4 * 1024 * 1024; // 4MiB
+		int cacheSize = NUMBER_OF_SCREENS_IN_MEMORY * displayMemory;
 		this.mCache = new FileCache(cacheSize);
+		mFails = new HashMap<String, Long>();
 		
 		int numberOfThreads = 1;
 		if (Build.VERSION.SDK_INT >= 10)
@@ -215,38 +264,33 @@ public class RemoteImageLoader {
 	 *            url or its tail to download, can be null
 	 */
 	public synchronized void loadImage(ImageHolder imageHolder, String resource) {
+		loadImage(imageHolder, resource, true);
+	}
+
+	public synchronized void loadImage(ImageHolder imageHolder,
+			String resource, boolean immediately) {
 		this.removeFromProcess(imageHolder);
 		if (TextUtils.isEmpty(resource)) {
-			imageHolder.setRemoteBitmap(this.mPlaceHolder);
+			imageHolder.setPlaceholer(immediately);
 			return;
 		}
 		Bitmap cachedBitmap = this.mCache.get(resource);
 		if (cachedBitmap != null) {
-			imageHolder.setRemoteBitmap(cachedBitmap);
+			imageHolder.setRemoteBitmap(cachedBitmap, immediately);
 			return;
 		}
-
-		imageHolder.setRemoteBitmap(this.mPlaceHolder);
+		Long fail = mFails.get(resource);
+		if (fail != null && System.currentTimeMillis() - fail < FAIL_TIME_MILLIS) {
+			imageHolder.failDownloading(immediately);
+			return;
+		}
+		
+		imageHolder.setPlaceholer(immediately);
 		try {
 			this.putToProcess(resource, imageHolder);
 		} catch (InterruptedException e) {
 			// Ignore this error
 		}
-	}
-
-	/**
-	 * actualy downlad image and display to correct ImageView use loadImage with
-	 * ImageHolder
-	 * 
-	 * @deprecated
-	 * @param imageView
-	 *            ImageView that should display image
-	 * @param resource
-	 *            url or its tail to download, can be null
-	 */
-	@Deprecated
-	public synchronized void loadImage(ImageView imageView, String resource) {
-		this.loadImage(new ImageViewHolder(imageView), resource);
 	}
 
 	/**
@@ -301,16 +345,32 @@ public class RemoteImageLoader {
 		}
 	}
 
-	private synchronized void receivedDrawable(final Bitmap bitmap,
-			String resource, final List<ImageHolder> imageHolders) {
-		if (bitmap == null)
-			return;
+	public void failDownloading(String resource, final List<ImageHolder> imageHolders) {
+		mFails.put(resource, System.currentTimeMillis());
 		this.mActivity.runOnUiThread(new Runnable() {
 
 			@Override
 			public void run() {
 				for (ImageHolder imageHolder : imageHolders) {
-					imageHolder.setRemoteBitmap(bitmap);
+					imageHolder.failDownloading(false);
+				}
+			}
+		});
+	}
+
+	private synchronized void receivedDrawable(final Bitmap bitmap,
+			String resource, final List<ImageHolder> imageHolders) {
+		if (bitmap == null) {
+			throw new RuntimeException("Bitmap could not be null");
+		}
+		mFails.remove(resource);
+		mCache.put(resource, bitmap);
+		this.mActivity.runOnUiThread(new Runnable() {
+
+			@Override
+			public void run() {
+				for (ImageHolder imageHolder : imageHolders) {
+					imageHolder.setRemoteBitmap(bitmap, false);
 				}
 			}
 		});
@@ -359,11 +419,11 @@ public class RemoteImageLoader {
 	}
 
 	public static RemoteImageLoader createUsingDp(Activity activity,
-			Bitmap placeHolder, float requestedWidthDp, float requestedHeightDp) {
+			float requestedWidthDp, float requestedHeightDp) {
 		Resources resources = activity.getResources();
 		int widthPx = convertDpToPixel(requestedWidthDp, resources);
 		int heightPx = convertDpToPixel(requestedHeightDp, resources);
-		return new RemoteImageLoader(activity, placeHolder, widthPx, heightPx);
+		return new RemoteImageLoader(activity, widthPx, heightPx);
 	}
 
 }

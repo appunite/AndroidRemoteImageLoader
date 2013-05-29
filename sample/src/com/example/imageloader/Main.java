@@ -72,8 +72,9 @@ public class Main extends Activity {
 
 			ImageView imageView = (ImageView) view
 					.findViewById(android.R.id.icon);
-			viewHolder.imageHolder = new RemoteImageLoader.ImageViewHolder(
-					imageView);
+			viewHolder.imageHolder = RemoteImageLoader.newImageHolder(
+                    imageView,R.drawable.ic_contact_picture_holo_dark,
+                    R.drawable.ic_contact_picture_holo_dark);
 			viewHolder.textView = (TextView) view
 					.findViewById(android.R.id.text1);
 
@@ -162,9 +163,7 @@ public class Main extends Activity {
 			cursorHelper.add("Franek", url);
 		}
 
-		Bitmap placeHolder = BitmapFactory.decodeResource(this.getResources(),
-				R.drawable.ic_contact_picture_holo_dark);
-		this.remoteImageLoader = RemoteImageLoader.createUsingDp(this, placeHolder,
+		this.remoteImageLoader = RemoteImageLoader.createUsingDp(this,
                 REQUESTED_SIZE, REQUESTED_SIZE);
 
 		SampleCursorAdapter sampleCursorAdapter = new SampleCursorAdapter(this,
