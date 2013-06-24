@@ -59,13 +59,16 @@ public class ImageLoader {
 			return -1;
 		}
 
-		return getScaleFactoreFromFileOptions(requestedHeight, requestedWidth,
-				maxHeight, maxWidth, fileOptions);
+		return getScaleFactorFromFileOptions(requestedHeight, requestedWidth,
+                maxHeight, maxWidth, fileOptions);
 	}
 	
-	public static int getImageScaleFactore(InputStream inputStream,
-			float requestedHeight, float requestedWidth, float maxHeight,
-			float maxWidth) {
+	@SuppressWarnings("UnusedDeclaration")
+    public static int getImageScaleFactor(InputStream inputStream,
+                                          float requestedHeight,
+                                          float requestedWidth,
+                                          float maxHeight,
+                                          float maxWidth) {
 		BitmapFactory.Options fileOptions = new BitmapFactory.Options();
 		fileOptions.inJustDecodeBounds = true;
 		BitmapFactory.decodeStream(inputStream, null, fileOptions);
@@ -73,13 +76,15 @@ public class ImageLoader {
 			return -1;
 		}
 
-		return getScaleFactoreFromFileOptions(requestedHeight, requestedWidth,
-				maxHeight, maxWidth, fileOptions);
+		return getScaleFactorFromFileOptions(requestedHeight, requestedWidth,
+                maxHeight, maxWidth, fileOptions);
 	}
 
-	private static int getScaleFactoreFromFileOptions(float requestedHeight,
-			float requestedWidth, float maxHeight, float maxWidth,
-			BitmapFactory.Options fileOptions) {
+	private static int getScaleFactorFromFileOptions(float requestedHeight,
+                                                     float requestedWidth,
+                                                     float maxHeight,
+                                                     float maxWidth,
+                                                     BitmapFactory.Options fileOptions) {
 		if (fileOptions.outHeight > requestedHeight
 				&& fileOptions.outWidth > requestedWidth
 				|| fileOptions.outHeight > maxHeight
@@ -143,7 +148,8 @@ public class ImageLoader {
 		return BitmapFactory.decodeFile(imageFilePath, o);
 	}
 	
-	public static Bitmap loadImage(InputStream inputStream,
+	@SuppressWarnings("UnusedDeclaration")
+    public static Bitmap loadImage(InputStream inputStream,
 			int scale) {
 
 		if (scale < 1)

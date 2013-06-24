@@ -33,6 +33,7 @@ import android.util.Log;
  * @author Jacek Marchwicki (jacek.marchwicki@gmail.com)
  * 
  */
+@SuppressWarnings("UnusedDeclaration")
 public class FileUtils {
 	private static final String TAG = FileUtils.class.getCanonicalName();
 	private static DateFormat sDateFormat = null;
@@ -72,25 +73,25 @@ public class FileUtils {
 	}
 
 	public static File getFileWithTimestamp(File directory, String filePrefix,
-			String fileExtendsion) {
+			String fileExtension) {
 		String timeStamp = getDateFormat().format(new Date());
 		String fileName = String.format("%s_%s.%s", filePrefix, timeStamp,
-				fileExtendsion);
+				fileExtension);
 		return new File(directory, fileName);
 	}
 
 	/**
 	 * 
-	 * @param context
+	 * @param context application context
 	 * @param type
 	 *            can by something like getDirectoryMovie or null
 	 * @param suffix
-	 *            can be applicaion name or null
-	 * @return
+	 *            can be application name or null
+	 * @return return storage directory
 	 */
 	public static File getStorageDirectory(Context context, String type,
 			String suffix) {
-		File mediaStorageDir = null;
+		File mediaStorageDir;
 
 		if (Environment.MEDIA_MOUNTED.equals(Environment
 				.getExternalStorageState())) {
@@ -116,12 +117,17 @@ public class FileUtils {
 			mediaStorageDir = context.getFilesDir();
 			Log.d(TAG, "external storage not mounted");
 		}
+        if (mediaStorageDir == null) {
+            return null;
+        }
 		if (mediaStorageDir.exists()) {
-			if (!mediaStorageDir.isDirectory())
+			if (!mediaStorageDir.isDirectory()) {
 				return null;
+            }
 		} else {
-			if (!mediaStorageDir.mkdirs())
+			if (!mediaStorageDir.mkdirs()) {
 				return null;
+            }
 		}
 		return mediaStorageDir;
 	}

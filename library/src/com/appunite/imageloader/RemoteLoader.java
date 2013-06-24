@@ -75,7 +75,9 @@ public class RemoteLoader {
 			try {
 				return saveInDiskCache(inputStream, resource);
 			} finally {
-				inputStream.close();
+                if (inputStream != null) {
+				    inputStream.close();
+                }
 			}
 		} catch (FileNotFoundException e) {
 			return null;
@@ -114,11 +116,10 @@ public class RemoteLoader {
 		}
 		try {
 
-			int bytesRead = 0;
-
-			OutputStream outputStream = new FileOutputStream(diskCacheFile);
+            OutputStream outputStream = new FileOutputStream(diskCacheFile);
 			try {
 				byte[] buffer = getBuffer();
+                int bytesRead;
 				while ((bytesRead = reader.read(buffer)) != -1) {
 					outputStream.write(buffer, 0, bytesRead);
 				}
@@ -131,7 +132,8 @@ public class RemoteLoader {
 			return diskCacheFile;
 		} finally {
 			if (!success) {
-				diskCacheFile.delete();
+                //noinspection ResultOfMethodCallIgnored
+                diskCacheFile.delete();
 			}
 		}
 	}
@@ -141,6 +143,9 @@ public class RemoteLoader {
 		Cursor cursor = cr.query(uri, new String[] {
 				MediaStore.Images.ImageColumns.ORIENTATION,
 				MediaStore.Images.ImageColumns.DATA }, null, null, null);
+        if (cursor == null) {
+            return 0;
+        }
 		try {
 			if (!cursor.moveToFirst())
 				return 0;
@@ -176,7 +181,7 @@ public class RemoteLoader {
 				return 270;
 			}
 
-		} catch (IOException e) {
+		} catch (IOException ignored) {
 		}
 		return 0;
 	}
@@ -188,14 +193,16 @@ public class RemoteLoader {
 			Cursor cursor = cr.query(uri,
 					new String[] { MediaStore.Video.VideoColumns._ID }, null,
 					null, null);
+            if (cursor == null) {
+                return null;
+            }
 			try {
 				if (cursor.moveToFirst()) {
 					return null;
 				}
 				long originId = cursor.getLong(0);
-				Bitmap curThumb = MediaStore.Video.Thumbnails.getThumbnail(cr,
-						originId, MediaStore.Video.Thumbnails.MINI_KIND, null);
-				return curThumb;
+                return MediaStore.Video.Thumbnails.getThumbnail(cr,
+                        originId, MediaStore.Video.Thumbnails.MINI_KIND, null);
 			} finally {
 				cursor.close();
 			}
@@ -203,6 +210,9 @@ public class RemoteLoader {
 			Cursor cursor = cr.query(uri,
 					new String[] { MediaStore.Images.ImageColumns._ID }, null,
 					null, null);
+            if (cursor == null) {
+                return null;
+            }
 			try {
 				if (!cursor.moveToFirst()) {
 					return null;
@@ -224,7 +234,7 @@ public class RemoteLoader {
 			int requestedHeight) {
 		Uri uri = Uri.parse(resource);
 		String scheme = uri.getScheme();
-		if (scheme.equals("content")) {
+		if (scheme != null && scheme.equals("content")) {
 			Bitmap bitmap = getThumbFromMediaStore(uri);
 			if (bitmap != null) {
 				return bitmap;
