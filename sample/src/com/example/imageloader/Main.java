@@ -16,12 +16,17 @@
 
 package com.example.imageloader;
 
+import android.animation.ObjectAnimator;
+import android.annotation.TargetApi;
 import android.app.Activity;
 import android.content.Context;
+import android.content.res.Resources;
 import android.database.Cursor;
 import android.database.MatrixCursor;
 import android.graphics.Bitmap;
-import android.graphics.BitmapFactory;
+import android.graphics.drawable.BitmapDrawable;
+import android.graphics.drawable.Drawable;
+import android.os.Build;
 import android.os.Bundle;
 import android.view.LayoutInflater;
 import android.view.View;
@@ -35,6 +40,166 @@ import com.appunite.imageloader.RemoteImageLoader;
 import com.appunite.imageloader.RemoteImageLoader.ImageHolder;
 
 public class Main extends Activity {
+
+
+    /**
+     * Example of animating drawable alpha
+     *
+     * Can be only used on post honeycomb devices.
+     * Can be used with NineOldAndroid but is not recommended because performance.
+     */
+    @TargetApi(Build.VERSION_CODES.HONEYCOMB)
+    private static class AnimatedHoneycombLoadableDrawable implements RemoteImageLoader.ImageHolder {
+
+        private final Resources mResources;
+        private final Drawable mErrorDrawable;
+        private ImageView mImageView;
+        private Bitmap mBitmap;
+        private android.animation.ObjectAnimator mHideAnimation;
+        private android.animation.ObjectAnimator mShowAnimation;
+
+        public AnimatedHoneycombLoadableDrawable(ImageView imageView, int errorPlaceholder) {
+
+            final Context context = imageView.getContext();
+            assert context != null;
+            mResources = context.getResources();
+            int duration = mResources
+                    .getInteger(android.R.integer.config_mediumAnimTime);
+
+            mImageView = imageView;
+            mErrorDrawable = mResources.getDrawable(errorPlaceholder);
+
+            mShowAnimation = android.animation.ObjectAnimator.ofInt(null, "alpha", 0, 255);
+            mShowAnimation.setDuration(duration);
+            mHideAnimation = android.animation.ObjectAnimator.ofInt(null, "alpha", 255, 0);
+            mHideAnimation.setDuration(duration);
+        }
+
+
+        @Override
+        public void setRemoteBitmap(Bitmap bitmap, boolean immediately) {
+            if (bitmap == mBitmap) {
+                return;
+            }
+            mBitmap = bitmap;
+            if (bitmap == null) {
+                failDownloading(immediately);
+                return;
+            }
+            final BitmapDrawable bitmapDrawable = new BitmapDrawable(mResources, bitmap);
+            mImageView.setImageDrawable(bitmapDrawable);
+            changeDisplay(bitmapDrawable, immediately, true);
+        }
+
+        private void changeDisplay(Drawable drawable, boolean immediately, boolean show) {
+            mShowAnimation.cancel();
+            mHideAnimation.cancel();
+            mShowAnimation.setTarget(drawable);
+            mHideAnimation.setTarget(drawable);
+            if (immediately) {
+                drawable.setAlpha(show ? 255 : 0);
+            } else {
+                if (show) {
+                    mShowAnimation.start();
+                } else {
+                    mHideAnimation.start();
+                }
+            }
+
+        }
+
+        @Override
+        public void failDownloading(boolean immediately) {
+            mBitmap = null;
+            mShowAnimation.cancel();
+            mHideAnimation.cancel();
+            mImageView.setImageDrawable(mErrorDrawable);
+        }
+
+        @Override
+        public void setPlaceholder(boolean immediately) {
+            mBitmap = null;
+            mShowAnimation.cancel();
+            mHideAnimation.cancel();
+            mImageView.setImageDrawable(null);
+        }
+    }
+
+    /**
+     * Example of animating view alpha
+     *
+     * Can be only used on post honeycomb devices.
+     * Can be used with NineOldAndroid but is not recommended because performance.
+     */
+    @TargetApi(Build.VERSION_CODES.HONEYCOMB)
+    private static class AnimatedHoneycombImageLoader implements RemoteImageLoader.ImageHolder {
+
+        private ImageView mImageView;
+        private int mErrorPlaceholder;
+        private Bitmap mBitmap;
+        private ObjectAnimator mHideAnimation;
+        private ObjectAnimator mShowAnimation;
+
+        public AnimatedHoneycombImageLoader(ImageView imageView, int errorPlaceholder) {
+
+            final Context context = imageView.getContext();
+            assert context != null;
+            int duration = context.getResources()
+                    .getInteger(android.R.integer.config_mediumAnimTime);
+
+            mImageView = imageView;
+            mErrorPlaceholder = errorPlaceholder;
+
+            mShowAnimation = ObjectAnimator.ofFloat(imageView, "alpha", 0.0f, 1.0f);
+            mShowAnimation.setDuration(duration);
+            mHideAnimation = ObjectAnimator.ofFloat(imageView, "alpha", 1.0f, 0.0f);
+            mHideAnimation.setDuration(duration);
+        }
+
+
+        @Override
+        public void setRemoteBitmap(Bitmap bitmap, boolean immediately) {
+            if (bitmap == mBitmap) {
+                return;
+            }
+            mBitmap = bitmap;
+            if (bitmap == null) {
+                failDownloading(immediately);
+                return;
+            }
+            mImageView.setImageBitmap(bitmap);
+            changeDisplay(immediately, true);
+        }
+
+        private void changeDisplay(boolean immediately, boolean show) {
+            mShowAnimation.cancel();
+            mHideAnimation.cancel();
+            if (immediately) {
+                mImageView.setAlpha(show ? 1.0f : 0.0f);
+            } else {
+                if (show) {
+                    mShowAnimation.start();
+                } else {
+                    mHideAnimation.start();
+                }
+            }
+
+        }
+
+        @Override
+        public void failDownloading(boolean immediately) {
+            mBitmap = null;
+            mImageView.setImageResource(mErrorPlaceholder);
+            changeDisplay(immediately, true);
+        }
+
+        @Override
+        public void setPlaceholder(boolean immediately) {
+            mBitmap = null;
+            changeDisplay(immediately, false);
+        }
+    }
+
 	private static class SampleCursorAdapter extends CursorAdapter {
 
 		private static class ViewHolder {
@@ -68,13 +233,27 @@ public class Main extends Activity {
 
 			LayoutInflater inflater = LayoutInflater.from(context);
 			View view = inflater.inflate(R.layout.main_item, null);
+            assert view != null;
 			view.setTag(viewHolder);
 
 			ImageView imageView = (ImageView) view
 					.findViewById(android.R.id.icon);
-			viewHolder.imageHolder = RemoteImageLoader.newImageHolder(
-                    imageView,R.drawable.ic_contact_picture_holo_dark,
+            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.HONEYCOMB) {
+                // Using honeycomb animated remote image loader
+
+                // Choose one:
+                // animating ImageView
+                viewHolder.imageHolder = new AnimatedHoneycombImageLoader(imageView,
                     R.drawable.ic_contact_picture_holo_dark);
+                // animating Drawable
+//                viewHolder.imageHolder = new AnimatedHoneycombLoadableDrawable(imageView,
+//                        R.drawable.ic_contact_picture_holo_dark);
+            } else {
+                // Using not animated normal image loader on pre honeycomb devices
+                viewHolder.imageHolder = RemoteImageLoader.newImageHolder(
+                        imageView,R.drawable.ic_contact_picture_holo_dark,
+                        R.drawable.ic_contact_picture_holo_dark);
+            }
 			viewHolder.textView = (TextView) view
 					.findViewById(android.R.id.text1);
 
@@ -111,7 +290,7 @@ public class Main extends Activity {
 		}
 
 		public void add(String string, String url) {
-			this.cursor.addRow(new Object[] { new Long(this.counter), string,
+			this.cursor.addRow(new Object[] {this.counter, string,
 					url });
 			this.counter++;
 		}
