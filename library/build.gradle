@@ -3,7 +3,7 @@ buildscript {
         mavenCentral()
     }
     dependencies {
-        classpath 'com.android.tools.build:gradle:0.4'
+        classpath 'com.android.tools.build:gradle:0.5.+'
     }
 }
 
@@ -23,17 +23,17 @@ dependencies {
     compile fileTree(dir: 'libs', include: '*.jar')
 }
 
-version = "2.1"
+version = "2.2"
 archivesBaseName = "auremoteimageloader"
 group = "com.appunite"
 
 android {
-    compileSdkVersion 14
+    compileSdkVersion 17
     buildToolsVersion "17"
 
     defaultConfig {
         minSdkVersion 7
-        targetSdkVersion 15
+        targetSdkVersion 17
     }
 
     sourceSets {
