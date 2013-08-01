@@ -39,6 +39,8 @@ import android.widget.TextView;
 import com.appunite.imageloader.RemoteImageLoader;
 import com.appunite.imageloader.RemoteImageLoader.ImageHolder;
 
+import java.util.Random;
+
 public class Main extends Activity {
 
 
@@ -301,7 +303,7 @@ public class Main extends Activity {
 
 	}
 
-	private static final float REQUESTED_SIZE = 80;
+	private static final float REQUESTED_SIZE = 192;
 
 	private ListView mListView;
 
@@ -336,11 +338,13 @@ public class Main extends Activity {
 	}
 
 	private void setAdapter() {
-		SampleCursorHelper cursorHelper = SampleCursorHelper.create();
-		String[] urls = this.getResources().getStringArray(R.array.urls);
-		for (String url : urls) {
-			cursorHelper.add("Franek", url);
-		}
+        final Random random = new Random();
+        SampleCursorHelper cursorHelper = SampleCursorHelper.create();
+        for (int i = 0; i < 1000; ++i) {
+            int item = random.nextInt(500);
+            String url = String.format("http://dummyimage.com/1200x1000/a3c739/fff.jpg&text=%d", item);
+            cursorHelper.add("Franek", url);
+        }
 
 		this.remoteImageLoader = RemoteImageLoader.createUsingDp(this,
                 REQUESTED_SIZE, REQUESTED_SIZE);

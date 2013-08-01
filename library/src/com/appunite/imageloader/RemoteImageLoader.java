@@ -32,6 +32,7 @@ import android.graphics.Point;
 import android.os.Build;
 import android.text.TextUtils;
 import android.util.DisplayMetrics;
+import android.util.Log;
 import android.view.Display;
 import android.widget.ImageView;
 import android.widget.ImageView.ScaleType;
@@ -42,6 +43,8 @@ import android.widget.ImageView.ScaleType;
  * 
  */
 public class RemoteImageLoader {
+
+    private static final String TAG = "RemoteImageLoader";
 
     public static interface ImageHolder {
         void setRemoteBitmap(Bitmap bitmap, boolean immediately);
@@ -69,8 +72,16 @@ public class RemoteImageLoader {
 				try {
 					String resource = RemoteImageLoader.this.takeToProcess();
 
-					Bitmap bitmap = mDownloader.downloadImage(resource,
+					Bitmap bitmap = null;
+                    try {
+                        bitmap = mDownloader.downloadImage(resource,
 							mImageRequestedWidth, mImageRequestedHeight);
+                    } catch (ImageLoader.ImageOutOfMemoryError e) {
+                        Log.e(TAG, "Out of memory - clearing memory cache. Resource: " + resource +
+                                " error: " + e.getMessage());
+                        mCache.evictAll();
+                        System.gc();
+                    }
 					List<ImageHolder> imageHolders = RemoteImageLoader.this
 							.finishByResource(resource);
 					if (bitmap != null) {

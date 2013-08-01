@@ -23,7 +23,7 @@ dependencies {
     compile fileTree(dir: 'libs', include: '*.jar')
 }
 
-version = "2.2"
+version = "2.3"
 archivesBaseName = "auremoteimageloader"
 group = "com.appunite"
 

@@ -7,8 +7,8 @@
 
     <ImageView
         android:id="@android:id/icon"
-        android:layout_width="48dp"
-        android:layout_height="48dp"
+        android:layout_width="192dp"
+        android:layout_height="192dp"
         android:src="@drawable/ic_contact_picture_holo_dark"
         android:contentDescription="@string/main_item_image_content_description"
         android:layout_gravity="left|top" />

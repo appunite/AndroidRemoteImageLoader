@@ -28,6 +28,12 @@ import android.graphics.BitmapFactory;
  */
 public class ImageLoader {
 
+    public static class ImageOutOfMemoryError extends Error {
+        public ImageOutOfMemoryError(OutOfMemoryError e, String fileName, int scaleFactor) {
+            super("Could not load image: " + fileName + " (scale: " + scaleFactor + ")", e);
+        }
+    }
+
 	/**
 	 * Calculate scale factor for image from file with requested size Scaling
 	 * will be done by slicing image by two Returned image will never be grater
@@ -49,9 +55,11 @@ public class ImageLoader {
 	 * @return scale factor for file, or -1 if file could not be opened. Scale
 	 *         factor should be 1 or multiple of 2
 	 */
-	public static int getImageScaleFactore(String imageFilePath,
-			float requestedHeight, float requestedWidth, float maxHeight,
-			float maxWidth) {
+	public static int getImageScaleFactor(String imageFilePath,
+                                          float requestedHeight,
+                                          float requestedWidth,
+                                          float maxHeight,
+                                          float maxWidth) {
 		BitmapFactory.Options fileOptions = new BitmapFactory.Options();
 		fileOptions.inJustDecodeBounds = true;
 		BitmapFactory.decodeFile(imageFilePath, fileOptions);
@@ -109,7 +117,7 @@ public class ImageLoader {
 	public static Bitmap loadImage(String imageFilePath,
 			float requestedHeight, float requestedWidth) {
 		return loadImage(imageFilePath, requestedHeight, requestedWidth,
-				3.0f * requestedHeight, 3.0f * requestedWidth);
+				2.0f * requestedHeight, 2.0f * requestedWidth);
 	}
 
 	/**
@@ -136,8 +144,8 @@ public class ImageLoader {
 			float requestedHeight, float requestedWidth, float maxHeight,
 			float maxWidth) {
 
-		int scale = getImageScaleFactore(imageFilePath, requestedHeight,
-				requestedWidth, maxHeight, maxWidth);
+		int scale = getImageScaleFactor(imageFilePath, requestedHeight,
+                requestedWidth, maxHeight, maxWidth);
 
 		if (scale < 1)
 			return null;
@@ -145,7 +153,11 @@ public class ImageLoader {
 		BitmapFactory.Options o = new BitmapFactory.Options();
 		o.inSampleSize = scale;
 
-		return BitmapFactory.decodeFile(imageFilePath, o);
+        try {
+		    return BitmapFactory.decodeFile(imageFilePath, o);
+        } catch (OutOfMemoryError e) {
+            throw new ImageOutOfMemoryError(e, imageFilePath, scale);
+        }
 	}
 	
 	@SuppressWarnings("UnusedDeclaration")
