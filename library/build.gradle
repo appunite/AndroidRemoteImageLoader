@@ -25,7 +25,17 @@ dependencies {
     compile fileTree(dir: 'libs', include: '*.jar')
 }
 
-version = "2.3"
+def baseVersionName = "2.4"
+if (project.hasProperty("versionSuffix")) {
+    project.ext.versionSuffix = project.versionSuffix
+} else {
+    project.ext.versionSuffix = "snapshot"
+}
+if (project.ext.versionSuffix) {
+    version = "${baseVersionName}-${project.versionSuffix}"
+} else {
+    version = "${baseVersionName}"
+}
 archivesBaseName = "auremoteimageloader"
 group = "com.appunite"
 
