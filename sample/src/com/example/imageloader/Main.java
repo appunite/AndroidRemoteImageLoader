@@ -304,6 +304,8 @@ public class Main extends Activity {
 	}
 
 	private static final float REQUESTED_SIZE = 192;
+    // For extreme testing
+//    private static final float REQUESTED_SIZE = 2048;
 
 	private ListView mListView;
 
@@ -343,7 +345,7 @@ public class Main extends Activity {
         for (int i = 0; i < 1000; ++i) {
             int item = random.nextInt(500);
             String url = String.format("http://dummyimage.com/1200x1000/a3c739/fff.jpg&text=%d", item);
-            cursorHelper.add("Franek", url);
+            cursorHelper.add(String.format("Franek %d", item), url);
         }
 
 		this.remoteImageLoader = RemoteImageLoader.createUsingDp(this,

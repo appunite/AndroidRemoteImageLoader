@@ -45,6 +45,7 @@ import android.widget.ImageView.ScaleType;
 public class RemoteImageLoader {
 
     private static final String TAG = "RemoteImageLoader";
+    private static final float MEMORY_THRESHOLD = (1.0f - 0.2f); // Leave always 20% of memory
 
     public static interface ImageHolder {
         void setRemoteBitmap(Bitmap bitmap, boolean immediately);
@@ -70,25 +71,19 @@ public class RemoteImageLoader {
 		public void run() {
 			while (!this.isStopped()) {
 				try {
-					String resource = RemoteImageLoader.this.takeToProcess();
+					String resource = takeToProcess();
 
 					Bitmap bitmap = null;
+                    boolean inLowMemory = false;
                     try {
                         bitmap = mDownloader.downloadImage(resource,
 							mImageRequestedWidth, mImageRequestedHeight);
                     } catch (ImageLoader.ImageOutOfMemoryError e) {
                         Log.e(TAG, "Out of memory - clearing memory cache. Resource: " + resource +
                                 " error: " + e.getMessage());
-                        mCache.evictAll();
-                        System.gc();
+                        inLowMemory = true;
                     }
-					List<ImageHolder> imageHolders = RemoteImageLoader.this
-							.finishByResource(resource);
-					if (bitmap != null) {
-						receivedDrawable(bitmap, resource, imageHolders);
-					} else {
-						failDownloading(resource, imageHolders);
-					}
+                    receivedDrawable(bitmap, resource, inLowMemory);
 				} catch (InterruptedException ignored) {
 				}
 			}
@@ -236,8 +231,9 @@ public class RemoteImageLoader {
         mFails = new HashMap<String, Long>();
 
         int numberOfThreads = 1;
-        if (Build.VERSION.SDK_INT >= 10)
+        if (Build.VERSION.SDK_INT >= 10) {
             numberOfThreads = 3;
+        }
 
         this.mDownloadImageThread = new DownloadImageThread[numberOfThreads];
 
@@ -248,14 +244,28 @@ public class RemoteImageLoader {
 		super.finalize();
 	}
 
-	private List<ImageHolder> finishByResource(String resource) {
+	private List<ImageHolder> finishByResource(Bitmap bitmap, String resource, boolean inLowMemory) {
 		List<ImageHolder> imageHolders = new ArrayList<ImageHolder>();
 		this.mLock.lock();
+
+        Runtime runtime = Runtime.getRuntime();
+        if(inLowMemory || runtime.maxMemory() * MEMORY_THRESHOLD < runtime.totalMemory()) {
+            mCache.evictAll();
+            System.gc();
+            Log.w(TAG, "Clearing cache because of low memory");
+        }
+        if (bitmap == null) {
+            mFails.put(resource, System.currentTimeMillis());
+        } else {
+            mFails.remove(resource);
+            mCache.put(getInMemoryKey(resource), bitmap);
+        }
 		try {
 			for (ImageHolder imageHolder : this.mViewResourceMap.keySet()) {
 				String viewResource = this.mViewResourceMap.get(imageHolder);
-				if (viewResource.equals(resource))
+				if (viewResource.equals(resource)) {
 					imageHolders.add(imageHolder);
+                }
 			}
 			for (ImageHolder imageHolder : imageHolders) {
 				this.mViewResourceMap.remove(imageHolder);
@@ -366,38 +376,31 @@ public class RemoteImageLoader {
 		}
 	}
 
-	public void failDownloading(String resource, final List<ImageHolder> imageHolders) {
-		mFails.put(resource, System.currentTimeMillis());
-		this.mActivity.runOnUiThread(new Runnable() {
-
-			@Override
-			public void run() {
-				for (ImageHolder imageHolder : imageHolders) {
-					imageHolder.failDownloading(false);
-				}
-			}
-		});
-	}
-
 	private synchronized void receivedDrawable(final Bitmap bitmap,
-			String resource, final List<ImageHolder> imageHolders) {
-		if (bitmap == null) {
-			throw new RuntimeException("Bitmap could not be null");
-		}
-		mFails.remove(resource);
-		mCache.put(getInMemoryKey(resource), bitmap);
+                                               final String resource,
+                                               final boolean inLowMemory) {
 		this.mActivity.runOnUiThread(new Runnable() {
-
 			@Override
 			public void run() {
-				for (ImageHolder imageHolder : imageHolders) {
-					imageHolder.setRemoteBitmap(bitmap, false);
-				}
+                bitmapReceived(bitmap, resource, inLowMemory);
 			}
 		});
 	}
 
-	private void removeFromProcess(ImageHolder imageHolder) {
+    private void bitmapReceived(Bitmap bitmap, String resource, boolean inLowMemory) {
+        final List<ImageHolder> imageHolders = finishByResource(bitmap, resource, inLowMemory);
+        if (bitmap != null) {
+            for (ImageHolder imageHolder : imageHolders) {
+                imageHolder.setRemoteBitmap(bitmap, false);
+            }
+        } else {
+            for (ImageHolder imageHolder : imageHolders) {
+                imageHolder.failDownloading(false);
+            }
+        }
+    }
+
+    private void removeFromProcess(ImageHolder imageHolder) {
 		this.mLock.lock();
 		try {
 			String resource = this.mViewResourceMap.remove(imageHolder);

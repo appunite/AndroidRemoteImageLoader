@@ -15,7 +15,7 @@ repositories {
 
 dependencies {
     compile project(":library")
-    //compile "com.appunite:auremoteimageloader:2.4"
+    //compile "com.appunite:auremoteimageloader:2.5"
 }
 
 android {
